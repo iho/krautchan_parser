@@ -1,4 +1,4 @@
-# krautchan_parser
+# Krautchan Parser
 Scrape all posts  from http://krautchan.net/int
 
 ## Require python2.7.* and postgresql 9.*
