@@ -1,14 +1,16 @@
 # -*- coding: utf-8 -*-
-import scrapy
-
 import html2text
 import psycopg2
+import scrapy
 
 h = html2text.HTML2Text()
 # h.ignore_links = True
 
-conn = psycopg2.connect(database="kc_database", user="kc_user", password="qwerty", host='localhost')
+conn = psycopg2.connect(database="kc_database",
+                        user="kc_user", password="qwerty", host='localhost')
 cur = conn.cursor()
+
+
 def prepare_database():
     cur.execute("""
 CREATE OR REPLACE FUNCTION upsert_post(id_ INT,date_ TIMESTAMP, text_ TEXT, url_ TEXT, thread_ INT) RETURNS VOID AS $$
@@ -33,6 +35,8 @@ CREATE TABLE IF NOT EXISTS post
 );
 """)
     print('Table created')
+
+
 class KrautchanSpider(scrapy.Spider):
     name = "krautchan"
     allowed_domains = ["krautchan.net"]
@@ -41,6 +45,7 @@ class KrautchanSpider(scrapy.Spider):
     )
     errors_count = 0
     succesful_count = 0
+
     def clean_html(self, text):
         try:
             text = h.handle(text)
@@ -54,32 +59,41 @@ class KrautchanSpider(scrapy.Spider):
     def parse(self, response):
         prepare_database()
         for uri in \
-            response.xpath('//main[@class="catalog"]/article/article/div/header/a/@href').extract():
+                response.xpath('//main[@class="catalog"]/article/article/div/header/a/@href').extract():
             url = 'http://krautchan.net' + uri
             yield scrapy.Request(url, callback=self.parse_page)
 
     def parse_page(self, response):
         base_url = response.url
-        thread_id = response.xpath('//*/div[1]/div/div[1]/span[4]/a[2]/text()').extract_first() 
-        id = thread_id 
-        date = response.xpath('//*/div[1]/div/div[1]/span[3]/text()').extract_first()
-        text = h.handle(response.xpath('//*/div[1]/div/div[@class="postbody"]/blockquote').extract_first())
+        thread_id = response.xpath(
+            '//*/div[1]/div/div[1]/span[4]/a[2]/text()').extract_first()
+        id = thread_id
+        date = response.xpath(
+            '//*/div[1]/div/div[1]/span[3]/text()').extract_first()
+        text = h.handle(response.xpath(
+            '//*/div[1]/div/div[@class="postbody"]/blockquote').extract_first())
         text = self.clean_html(text)
         # print(id, date,  text, url, thread_id)
-        anchor = response.xpath('//*/div[1]/div[1]/span[4]/a[1]/@href').extract_first()
-        url = base_url + '/' + anchor
-        cur.execute("SELECT upsert_post(%s, %s::TIMESTAMP, %s, %s,%s);", (id, date,  text, url, thread_id))
+        anchor = response.xpath(
+            '//*/div[1]/div[1]/span[4]/a[1]/@href').extract_first()
+        url = base_url + anchor
+        cur.execute("SELECT upsert_post(%s, %s::TIMESTAMP, %s, %s,%s);",
+                    (id, date,  text, url, thread_id))
         conn.commit()
         self.succesful_count += 1
         for reply in response.xpath('//*[@class="postreply"]'):
-            anchor = reply.xpath('.//*[@class="postnumber"]/a[1]/@href').extract_first()
-            url = base_url + '/' + anchor
-            date = reply.xpath('.//*[@class="postdate"]/text()').extract_first()
-            id = reply.xpath('.//*[@class="postnumber"]/a[2]/text()').extract_first()
+            anchor = reply.xpath(
+                './/*[@class="postnumber"]/a[1]/@href').extract_first()
+
+            url = base_url + anchor
+            date = reply.xpath(
+                './/*[@class="postdate"]/text()').extract_first()
+            id = reply.xpath(
+                './/*[@class="postnumber"]/a[2]/text()').extract_first()
             text = reply.xpath('div/blockquote').extract_first()
             text = self.clean_html(text)
             cur.execute("SELECT upsert_post(%s, %s::TIMESTAMP, %s, %s,%s);", (id, date,  text, url,
-                thread_id) )
+                                                                              thread_id))
             conn.commit()
             self.succesful_count += 1
         print(self.errors_count, self.succesful_count)
