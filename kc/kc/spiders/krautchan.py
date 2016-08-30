@@ -59,18 +59,21 @@ class KrautchanSpider(scrapy.Spider):
             yield scrapy.Request(url, callback=self.parse_page)
 
     def parse_page(self, response):
-        url = response.url
-
+        base_url = response.url
         thread_id = response.xpath('//*/div[1]/div/div[1]/span[4]/a[2]/text()').extract_first() 
         id = thread_id 
         date = response.xpath('//*/div[1]/div/div[1]/span[3]/text()').extract_first()
         text = h.handle(response.xpath('//*/div[1]/div/div[@class="postbody"]/blockquote').extract_first())
         text = self.clean_html(text)
         # print(id, date,  text, url, thread_id)
+        anchor = response.xpath('//*/div[1]/div[1]/span[4]/a[1]/@href').extract_first()
+        url = base_url + '/' + anchor
         cur.execute("SELECT upsert_post(%s, %s::TIMESTAMP, %s, %s,%s);", (id, date,  text, url, thread_id))
         conn.commit()
         self.succesful_count += 1
         for reply in response.xpath('//*[@class="postreply"]'):
+            anchor = reply.xpath('.//*[@class="postnumber"]/a[1]/@href').extract_first()
+            url = base_url + '/' + anchor
             date = reply.xpath('.//*[@class="postdate"]/text()').extract_first()
             id = reply.xpath('.//*[@class="postnumber"]/a[2]/text()').extract_first()
             text = reply.xpath('div/blockquote').extract_first()
@@ -79,6 +82,4 @@ class KrautchanSpider(scrapy.Spider):
                 thread_id) )
             conn.commit()
             self.succesful_count += 1
-
-
         print(self.errors_count, self.succesful_count)
