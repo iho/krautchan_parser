@@ -68,8 +68,6 @@ class KrautchanSpider(scrapy.Spider):
         country_image_path = response.xpath('//*/div[1]/div/img/@src').extract_first()
         country = country_image_path[14:-4]
         main_post = True
-
-        print(id, date,   url, country, country_image_path, thread_id, main_post )
         cur.execute("""SELECT upsert_post(%s, %s::TIMESTAMP, %s, %s, %s, %s, %s, %s);""",
                     (id, date,  text, url, country, country_image_path, thread_id, main_post ))
 

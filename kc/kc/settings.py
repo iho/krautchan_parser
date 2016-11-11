@@ -14,7 +14,7 @@ SPIDER_MODULES = ['kc.spiders']
 NEWSPIDER_MODULE = 'kc.spiders'
 
 CONCURRENT_REQUESTS = 3
-DOWNLOAD_DELAY = 0.250
+DOWNLOAD_DELAY = 0.50
 
 # Crawl responsibly by identifying yourself (and your website) on the user-agent
 #USER_AGENT = 'kc (+http://www.yourdomain.com)'
