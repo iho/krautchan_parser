@@ -1,10 +1,7 @@
 # -*- coding: utf-8 -*-
-import html2text
 import psycopg2
 import scrapy
 
-h = html2text.HTML2Text()
-# h.ignore_links = True
 
 conn = psycopg2.connect(database="kc_database",
                         user="kc_user", password="qwerty", host='localhost')
@@ -13,13 +10,14 @@ cur = conn.cursor()
 
 def prepare_database():
     cur.execute("""
-CREATE OR REPLACE FUNCTION upsert_post(id_ INT,date_ TIMESTAMP, text_ TEXT, url_ TEXT, thread_ INT) RETURNS VOID AS $$
+CREATE OR REPLACE FUNCTION upsert_post(id_ INT,date_ TIMESTAMP, text_ TEXT, url_ TEXT, country_code_ TEXT, country_path_ TEXT, thread_ INT, main_post_ BOOLEAN) RETURNS VOID AS $$
 DECLARE 
 BEGIN 
-    UPDATE post SET  date=date_, text=text_, url=url_, thread=thread_
+    UPDATE post SET  date=date_
     WHERE id=id_;
     IF NOT FOUND THEN 
-    INSERT INTO post values (id_, date_, text_, url_, thread_);
+    INSERT INTO post (id, date, text, url, country_code, country_path, thread, main_post ) values 
+    (id_, date_, text_, url_, country_code_, country_path_, thread_, main_post_);
     END IF; 
 END; 
 $$ LANGUAGE 'plpgsql';
@@ -31,7 +29,10 @@ CREATE TABLE IF NOT EXISTS post
     date TIMESTAMP WITH TIME ZONE,
     text TEXT,
     url TEXT,
-    thread INTEGER
+    country_code TEXT,
+    country_path TEXT,
+    thread INTEGER, 
+    main_post BOOLEAN 
 );
 """)
     print('Table created')
@@ -45,17 +46,6 @@ class KrautchanSpider(scrapy.Spider):
     )
     errors_count = 0
     succesful_count = 0
-
-    def clean_html(self, text):
-        try:
-            text = h.handle(text)
-            text = text.strip()
-            return text
-        except Exception as e:
-            print(e)
-            self.errors_count += 1
-            return ''
-
     def parse(self, response):
         prepare_database()
         for uri in \
@@ -70,30 +60,34 @@ class KrautchanSpider(scrapy.Spider):
         id = thread_id
         date = response.xpath(
             '//*/div[1]/div/div[1]/span[3]/text()').extract_first()
-        text = h.handle(response.xpath(
-            '//*/div[1]/div/div[@class="postbody"]/blockquote').extract_first())
-        text = self.clean_html(text)
-        # print(id, date,  text, url, thread_id)
+        text = response.xpath(
+            '//*/div[1]/div/div[@class="postbody"]/blockquote').extract_first()
         anchor = response.xpath(
             '//*/div[1]/div[1]/span[4]/a[1]/@href').extract_first()
         url = base_url + anchor
-        cur.execute("SELECT upsert_post(%s, %s::TIMESTAMP, %s, %s,%s);",
-                    (id, date,  text, url, thread_id))
+        country_image_path = response.xpath('//*/div[1]/div/img/@src').extract_first()
+        country = country_image_path[14:-4]
+        main_post = True
+
+        print(id, date,   url, country, country_image_path, thread_id, main_post )
+        cur.execute("""SELECT upsert_post(%s, %s::TIMESTAMP, %s, %s, %s, %s, %s, %s);""",
+                    (id, date,  text, url, country, country_image_path, thread_id, main_post ))
+
         conn.commit()
         self.succesful_count += 1
+
+        main_post = False
         for reply in response.xpath('//*[@class="postreply"]'):
             anchor = reply.xpath(
                 './/*[@class="postnumber"]/a[1]/@href').extract_first()
-
             url = base_url + anchor
-            date = reply.xpath(
-                './/*[@class="postdate"]/text()').extract_first()
-            id = reply.xpath(
-                './/*[@class="postnumber"]/a[2]/text()').extract_first()
+            date = reply.xpath( './/*[@class="postdate"]/text()').extract_first()
+            country_image_path = reply.xpath( './/img/@src').extract_first()
+            country = country_image_path[14:-4]
+            id = reply.xpath('.//*[@class="postnumber"]/a[2]/text()').extract_first()
             text = reply.xpath('div/blockquote').extract_first()
-            text = self.clean_html(text)
-            cur.execute("SELECT upsert_post(%s, %s::TIMESTAMP, %s, %s,%s);", (id, date,  text, url,
-                                                                              thread_id))
+            cur.execute("""SELECT upsert_post(%s, %s::TIMESTAMP, %s, %s, %s, %s, %s, %s);""",
+                    (id, date,  text, url, country, country_image_path, thread_id, main_post ))
             conn.commit()
             self.succesful_count += 1
         print(self.errors_count, self.succesful_count)
