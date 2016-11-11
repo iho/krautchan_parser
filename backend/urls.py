@@ -15,8 +15,9 @@ Including another URLconf
 """
 from django.conf.urls import url, include
 from django.contrib import admin
-
+from int.views import count
 urlpatterns = [
     url(r'^admin/', admin.site.urls),
+    url(r'^count', count),
     url(r'^api/', include('int.views')),
 ]

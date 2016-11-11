@@ -12,6 +12,7 @@ from rest_framework import (filters, generics, mixins, permissions, status,
 
 
 from django.shortcuts import render
+from django.http import JsonResponse
 router = routers.SimpleRouter()
 # Create your views here.
 
@@ -37,3 +38,10 @@ router.register(r'threads', ThreadViewSet, base_name='threads')
 router.register(r'posts', PostViewSet, base_name='posts')
 
 urlpatterns = router.urls
+
+
+def count(request):
+    return JsonResponse({
+        'threads': Post.objects.filter(main_post=True).count(),
+        'posts': Post.objects.all().count()
+        })
